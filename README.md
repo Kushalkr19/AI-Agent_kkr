@@ -1,9 +1,9 @@
 # AI Agent Résumé Matcher
 
 This repository contains an AI‑powered résumé matcher designed to help you
-tailor your résumé to a specific job description.  It builds upon the
+tailor your resume to a specific job description.  It builds upon the
 original ``resume_matcher.py`` script by incorporating contextual matching
-alongside keyword overlap and by producing a ranked outline of your résumé
+alongside keyword overlap and by producing a ranked outline of your resume
 with suggestions for incorporating missing keywords.
 
 ## Overview
@@ -38,7 +38,7 @@ require extra Python packages and (for rewriting) an API key:
   back to TF–IDF automatically.
 
 * **LLM rewriting** (``--rewrite``): rewrites bullet points using a large
-  language model such as GPT‑4 or LLaMA‑3.  This can inject missing keywords
+  language model such as GPT‑4.  This can inject missing keywords
   and polish your achievements for better alignment with the job description.
   To enable rewriting, install the ``openai`` Python package, set the
   ``OPENAI_API_KEY`` environment variable, and run the script with
@@ -48,7 +48,7 @@ These advanced layers mirror the conceptual pipeline of a SaaS tool:
 
 | Layer                    | Tools Used                         | Purpose                                          |
 | ------------------------ | ---------------------------------- | ------------------------------------------------ |
-| **LLM Rewriting Engine** | OpenAI GPT‑4 or LLaMA‑3             | Rewrite and inject missing keywords contextually |
+| **LLM Rewriting Engine** | OpenAI GPT‑4                       | Rewrite and inject missing keywords contextually |
 | **Semantic Matching**    | SentenceTransformers + FAISS        | Bullet <-> JD matching beyond exact words        |
 | **Keyword Extraction**   | TF‑IDF + simple NER/stop‑word removal | Highlight must‑have keywords for ATS             |
 | **Experience Generator** | Prompt chaining + user’s projects    | Add realistic projects aligned with the JD       |
