@@ -1,26 +1,45 @@
-# AI Agent Resume Matcher
+# AI Agent Résumé Matcher
 
-This repository contains an AI-powered resume matcher that helps you tailor your resume to a specific job description.
+This repository contains an AI‑powered résumé matcher designed to help you
+tailor your résumé to a specific job description.  It builds upon the
+original ``resume_matcher.py`` script by incorporating contextual matching
+alongside keyword overlap and by producing a ranked outline of your résumé
+with suggestions for incorporating missing keywords.
 
 ## Overview
 
-The `resume_matcher.py` script compares the content of a résumé and a job description using TF‑IDF vectorization and cosine similarity. It extracts the most frequent keywords from the job description, checks which appear in the résumé, and orders bullet points by relevance. The tool runs locally and doesn’t send any data to external services.
+The core logic lives in ``resume_agent.py``.  Given a résumé and a job
+description (PDF or plain‑text), it:
 
-## Usage
+1. Extracts text from the documents using the ``pdftotext`` utility for PDFs.
+2. Normalises and tokenises the text to remove punctuation and stop words.
+3. Computes both an overall similarity score between the résumé and the job
+   description, and per‑bullet relevance scores using TF–IDF and cosine
+   similarity to estimate contextual alignment.
+4. Extracts the most frequent keywords from the job description and
+   determines which are present or missing in the résumé.
+5. Ranks résumé bullet points by a weighted combination of keyword and
+   contextual relevance.
+6. Generates a match report summarising the scores and a curated résumé
+   outline with suggestions for incorporating missing keywords.
 
-1. Ensure you have Python 3 and `scikit‑learn` installed.
-2. Place your résumé (PDF or `.txt`) and job description (`.pdf` or `.txt`) in the same folder.
-3. Run the script from the command line:
+Run the script with:
+
+```bash
+python resume_agent.py your_resume.pdf job_description.txt
+```
+
+This will create ``match_report.txt`` and ``curated_resume.txt`` in the
+current directory.  See the docstring at the top of ``resume_agent.py`` for
+more details and additional command‑line options.
+
+## Compatibility Note
+
+For convenience the legacy entry point ``resume_matcher.py`` now simply
+invokes the enhanced agent.  You can still run:
 
 ```bash
 python resume_matcher.py your_resume.pdf job_description.txt
 ```
 
-4. The script will generate `match_report.txt` and `curated_resume.txt` with detailed feedback.
-
-See the script’s docstring for more details.
-
-## Notes
-
-- The match score is a simple measure of textual overlap; use it as a guide rather than a definitive ranking.
-- Only include keywords in your résumé if they genuinely represent your experience.
+and it will delegate to ``resume_agent.py``.
