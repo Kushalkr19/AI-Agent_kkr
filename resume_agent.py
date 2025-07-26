@@ -60,6 +60,26 @@ from typing import Iterable, List, Tuple
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
+# -----------------------------------------------------------------------------
+# Optional advanced dependencies
+#
+# The following optional imports enable semantic matching using sentence
+# embeddings and FAISS, and bullet rewriting via large language models.
+# If these libraries are not installed, the agent will gracefully fall back to
+# its TF–IDF based contextual matching and will not attempt to rewrite bullets.
+try:
+    from sentence_transformers import SentenceTransformer  # type: ignore
+    import faiss  # type: ignore
+    ADVANCED_AVAILABLE = True
+except Exception:
+    ADVANCED_AVAILABLE = False
+
+try:
+    import openai  # type: ignore
+    OPENAI_AVAILABLE = True
+except Exception:
+    OPENAI_AVAILABLE = False
+
 
 # A reusable stop word list.  We replicate the list from the original
 # resume_matcher.py to avoid external downloads.  Feel free to extend this set
@@ -255,6 +275,111 @@ def compute_bullet_similarity(bullets: List[str], job_description: str) -> List[
     return sims.flatten().tolist()
 
 
+def compute_semantic_similarity(bullets: List[str], job_description: str) -> List[float]:
+    """Compute semantic similarity between each bullet and the job description.
+
+    This function uses sentence embeddings produced by a transformer model and
+    FAISS for efficient similarity search.  If the necessary libraries are not
+    installed, it will fall back to TF–IDF based similarity by delegating to
+    ``compute_bullet_similarity``.
+
+    Parameters
+    ----------
+    bullets : List[str]
+        List of bullet texts.
+    job_description : str
+        The job description as a single string.
+
+    Returns
+    -------
+    List[float]
+        A list of similarity scores for each bullet.
+    """
+    # Fall back if advanced deps are unavailable
+    if not ADVANCED_AVAILABLE:
+        return compute_bullet_similarity(bullets, job_description)
+    # Initialise a transformer model for embeddings.  Using a relatively small
+    # model keeps latency low when running locally.  You may replace this
+    # identifier with another model path if you have downloaded one manually.
+    model_name = 'sentence-transformers/all-MiniLM-L6-v2'
+    try:
+        model = SentenceTransformer(model_name)
+    except Exception:
+        # If loading fails, fall back gracefully
+        return compute_bullet_similarity(bullets, job_description)
+    # Encode bullets and job description
+    bullet_embeddings = model.encode(bullets, convert_to_numpy=True)
+    job_embedding = model.encode([job_description], convert_to_numpy=True)[0]
+    # Build a FAISS index for efficient nearest neighbour search
+    dim = bullet_embeddings.shape[1]
+    index = faiss.IndexFlatIP(dim)
+    # Normalize embeddings for cosine similarity via inner product
+    faiss.normalize_L2(bullet_embeddings)
+    faiss.normalize_L2(job_embedding.reshape(1, -1))
+    index.add(bullet_embeddings)
+    # Compute similarities
+    scores, _ = index.search(job_embedding.reshape(1, -1), len(bullets))
+    # scores is shape (1, n), convert to list
+    return scores[0].tolist()
+
+
+def rewrite_bullets_llm(bullets: List[str], job_description: str, model: str = 'gpt-4') -> List[str]:
+    """Rewrite and enhance bullet points using a large language model.
+
+    This function sends each bullet along with the job description to an LLM
+    (e.g. GPT‑4 or LLaMA‑3) and requests a rewritten version that better
+    highlights relevant experience and incorporates missing keywords.  If the
+    ``openai`` library is not installed or no API key is configured, the
+    original bullets are returned unchanged.
+
+    Parameters
+    ----------
+    bullets : List[str]
+        Original bullet points from the résumé.
+    job_description : str
+        The job description text used to provide context to the LLM.
+    model : str, optional
+        The name of the OpenAI model to use (default: 'gpt-4').
+
+    Returns
+    -------
+    List[str]
+        A list of rewritten bullet points, or the original list if rewriting
+        cannot be performed.
+    """
+    if not OPENAI_AVAILABLE:
+        return bullets
+    # Require an API key to be set via environment variable
+    if not os.getenv('OPENAI_API_KEY'):
+        return bullets
+    rewritten: List[str] = []
+    # Construct a prompt template
+    system_prompt = (
+        'You are an expert resume editor. Rewrite each bullet point to align with '
+        'the job description, adding relevant context and keywords where appropriate. '
+        'Maintain factual accuracy and conciseness.'
+    )
+    for bullet in bullets:
+        # Compose messages for chat completion
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Job description:\n{job_description}\n\nOriginal bullet:\n{bullet}"}
+        ]
+        try:
+            response = openai.ChatCompletion.create(
+                model=model,
+                messages=messages,
+                max_tokens=150,
+                temperature=0.3,
+            )
+            new_text = response.choices[0].message['content'].strip()
+            rewritten.append(new_text)
+        except Exception:
+            # If the API call fails, preserve the original bullet
+            rewritten.append(bullet)
+    return rewritten
+
+
 def compute_bullet_keyword_scores(bullets: List[str], job_keywords: Iterable[str]) -> List[int]:
     """Count how many job keywords appear in each bullet.
 
@@ -417,12 +542,14 @@ def write_curated_resume(ranked_bullets: List[Tuple[str, float, int, float]],
 
 def main() -> None:
     """Parse command line arguments and orchestrate the resume matching process."""
-    parser = argparse.ArgumentParser(description='Advanced résumé matcher with contextual and keyword analysis.')
+    parser = argparse.ArgumentParser(description='Advanced résumé matcher with contextual, semantic and keyword analysis.')
     parser.add_argument('resume', help='Path to the résumé file (PDF or .txt)')
     parser.add_argument('job_description', help='Path to the job description file (PDF or .txt)')
     parser.add_argument('--report', default='match_report.txt', help='Output path for the match report (default: match_report.txt)')
     parser.add_argument('--curated', default='curated_resume.txt', help='Output path for the curated résumé (default: curated_resume.txt)')
     parser.add_argument('--keywords', type=int, default=20, help='Number of top keywords to extract from the job description (default: 20)')
+    parser.add_argument('--semantic', action='store_true', help='Use sentence embeddings and FAISS for semantic similarity (requires sentence_transformers and faiss).')
+    parser.add_argument('--rewrite', action='store_true', help='Rewrite bullets using a large language model (requires openai and an API key).')
     args = parser.parse_args()
 
     # Extract raw text from files
@@ -451,10 +578,29 @@ def main() -> None:
             continue
         remaining_lines.append(line)
 
-    # Compute bullet scores
-    context_scores = compute_bullet_similarity([' '.join(preprocess(b)) for b in bullets], ' '.join(job_tokens))
+    # Compute bullet scores.  Choose between TF–IDF contextual similarity and
+    # semantic similarity based on the --semantic flag and availability of
+    # advanced dependencies.
+    preprocessed_bullets = [' '.join(preprocess(b)) for b in bullets]
+    if args.semantic:
+        context_scores = compute_semantic_similarity(preprocessed_bullets, ' '.join(job_tokens))
+        if not ADVANCED_AVAILABLE:
+            print('Warning: semantic similarity requested but sentence_transformers/faiss are not installed. Falling back to TF–IDF.')
+    else:
+        context_scores = compute_bullet_similarity(preprocessed_bullets, ' '.join(job_tokens))
     keyword_scores = compute_bullet_keyword_scores(bullets, job_keywords)
     ranked_bullets = rank_bullets(bullets, context_scores, keyword_scores)
+
+    # Optionally rewrite bullets using an LLM.  Rewriting occurs after ranking to
+    # ensure that high‑relevance bullets are still surfaced.  Only the text
+    # content is rewritten; scores remain associated with the original bullet.
+    if args.rewrite:
+        rewritten_texts = rewrite_bullets_llm([rb[0] for rb in ranked_bullets], ' '.join(job_tokens))
+        # Replace bullet text in ranked_bullets
+        ranked_bullets = [
+            (rewritten, combined, kw_score, ctx_score)
+            for rewritten, (_, combined, kw_score, ctx_score) in zip(rewritten_texts, ranked_bullets)
+        ]
 
     # Write outputs
     write_report(global_similarity, job_keywords, resume_tokens, args.report, ranked_bullets)
