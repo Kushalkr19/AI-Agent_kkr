@@ -1,7 +1,7 @@
-# AI Agent Résumé Matcher
+# AI Agent Resume Matcher
 
 This repository contains an AI‑powered résumé matcher designed to help you
-tailor your résumé to a specific job description.  It builds upon the
+tailor your resume to a specific job description.  It builds upon the
 original ``resume_matcher.py`` script by incorporating contextual matching
 alongside keyword overlap and by producing a ranked outline of your résumé
 with suggestions for incorporating missing keywords.
@@ -18,7 +18,7 @@ description (PDF or plain‑text), it:
    similarity to estimate contextual alignment.
 4. Extracts the most frequent keywords from the job description and
    determines which are present or missing in the résumé.
-5. Ranks résumé bullet points by a weighted combination of keyword and
+5. Ranks resume bullet points by a weighted combination of keyword and
    contextual relevance.
 6. Generates a match report summarising the scores and a curated résumé
    outline with suggestions for incorporating missing keywords.
