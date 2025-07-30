@@ -1,4 +1,4 @@
-# AI Agent Résumé Matcher
+# AI Agent Resume Matcher
 
 This repository contains an AI‑powered résumé matcher designed to help you
 tailor your resume to a specific job description.  It builds upon the
