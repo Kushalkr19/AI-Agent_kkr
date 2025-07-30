@@ -18,7 +18,7 @@ description (PDF or plain‑text), it:
    similarity to estimate contextual alignment.
 4. Extracts the most frequent keywords from the job description and
    determines which are present or missing in the résumé.
-5. Ranks résumé bullet points by a weighted combination of keyword and
+5. Ranks resume bullet points by a weighted combination of keyword and
    contextual relevance.
 6. Generates a match report summarising the scores and a curated résumé
    outline with suggestions for incorporating missing keywords.
